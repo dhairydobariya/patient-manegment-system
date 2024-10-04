@@ -90,11 +90,31 @@ const doctorSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Patient', // Reference to Patient model
   }],
-  role: { type: String, default: "Doctor" },
+  role: { 
+    type: String, 
+    default: "Doctor" 
+  },
+
+  // Unavailable Times should not be required, since not every doctor has unavailable times initially
+  unavailableTimes: [
+    {
+      date: {
+        type: Date, // Date of unavailability
+        required: true, // Each unavailable time must have a date
+      },
+      timeRange: {
+        start: {
+          type: String, // Start time (e.g., "10:00")
+          required: true, // Start time is required
+        },
+        end: {
+          type: String, // End time (e.g., "12:00")
+          required: true, // End time is required
+        },
+      }
+    }
+  ]
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Doctor', doctorSchema);
-
-
-
-// work on 

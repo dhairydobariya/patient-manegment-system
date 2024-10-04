@@ -66,7 +66,6 @@ const register = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-
 const createDoctor = async (req, res) => {
     // Validation checks
     await body('name').notEmpty().withMessage('Name is required').run(req);
@@ -76,7 +75,6 @@ const createDoctor = async (req, res) => {
     await body('phoneNumber').notEmpty().withMessage('Phone number is required').run(req);
     await body('age').isInt({ min: 18 }).withMessage('Age must be at least 18').run(req);
     await body('onlineConsultationRate').isNumeric().withMessage('Consultation rate must be a number').run(req);
-    await body('currentHospital').notEmpty().withMessage('Current hospital name is required').run(req); // Add validation for hospital name
 
     // Check for validation errors
     const errors = validationResult(req);
@@ -84,19 +82,38 @@ const createDoctor = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, qualification, specialtyType, gender, experience, checkupTime, workon, workingTime, breakTime, phoneNumber, email, password, age, address, onlineConsultationRate, currentHospital, hospitalWebsite, emergencyContactNumber, doctorAddress, description, signature } = req.body;
+    const {
+        name, qualification, specialtyType, gender, experience, checkupTime, workon, workingTime,
+        breakTime, phoneNumber, email, password, age, address, onlineConsultationRate, 
+        hospitalWebsite, emergencyContactNumber, doctorAddress, description, signature
+    } = req.body;
 
     try {
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Find the hospital by its name
-        const hospital = await Hospital.findOne({ name: currentHospital });
+        // Get the logged-in admin's ID (assuming req.user is populated via authentication middleware)
+        const adminId = req.user.id;
+
+        // Find the admin by ID to get their associated hospital ID
+        const admin = await usermodel.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        // Ensure the admin is associated with a hospital
+        const hospitalId = admin.hospital; // Retrieve the hospital ID from the admin's data
+        if (!hospitalId) {
+            return res.status(400).json({ message: 'Admin is not associated with a hospital' });
+        }
+
+        // Find the hospital by ID to ensure it exists
+        const hospital = await Hospital.findById(hospitalId);
         if (!hospital) {
             return res.status(404).json({ message: 'Hospital not found' });
         }
 
-        // Create a new doctor
+        // Create a new doctor and automatically assign the admin's hospital ID
         const newDoctor = new Doctor({
             name,
             qualification,
@@ -113,7 +130,7 @@ const createDoctor = async (req, res) => {
             age,
             address,
             onlineConsultationRate,
-            currentHospital: hospital._id, // Attach the hospital ID
+            currentHospital: hospital._id, // Automatically attach the hospital ID from the admin
             hospitalWebsite,
             emergencyContactNumber,
             doctorAddress,
@@ -128,8 +145,6 @@ const createDoctor = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-
-
 
 
 
