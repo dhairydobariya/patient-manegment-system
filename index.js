@@ -6,6 +6,7 @@ let  http = require('http');
 let { Server } = require('socket.io');
 
 let route = require('./route/route')
+let billroute=require('./route/billroute.js')
 let adminroute = require('./route/adminRoute')
 let doctorroute = require('./route/doctorRoutes')
 let patientroute = require('./route/patientRoutes')
@@ -27,6 +28,7 @@ app.use(express.json());
 app.use(cookieparser())
 
 app.use('/' , route)
+app.use('/bill' , billroute)
 app.use('/admin' , adminroute)
 app.use('/doctor' , doctorroute)
 app.use('/patient' , patientroute)

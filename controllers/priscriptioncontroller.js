@@ -51,9 +51,24 @@ let createPrescription = async (req, res) => {
   
   
 // Get all prescriptions (optional pagination can be added)
-let getAllPrescriptions = async (req, res) => {
+const getAllPrescriptions = async (req, res) => {
   try {
-    const prescriptions = await Prescription.find();
+    const userId = req.user.id; // Assuming req.user contains the logged-in user's details
+    const userRole = req.user.role; // Assuming req.user also contains the user's role (doctor or patient)
+
+    let prescriptions;
+
+    if (userRole === 'doctor') {
+      // If the user is a doctor, return prescriptions where the doctorId matches
+      prescriptions = await Prescription.find({ doctorId: userId });
+    } else if (userRole === 'patient') {
+      // If the user is a patient, return prescriptions where the patientId matches
+      prescriptions = await Prescription.find({ patientId: userId });
+    } else {
+      return res.status(403).json({ message: 'Access denied. Invalid role.' });
+    }
+
+    // Send the filtered prescriptions based on the user's role
     res.status(200).json(prescriptions);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch prescriptions', error: error.message });
@@ -64,17 +79,39 @@ let getAllPrescriptions = async (req, res) => {
 let getPrescriptionByAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.params;
-    
+    const userId = req.user.id; // This will hold the logged-in user's ID
+    const userRole = req.user.role; // This will hold the logged-in user's role (doctor or patient)
+
+    // Fetch the prescription by appointmentId
     const prescription = await Prescription.findOne({ appointmentId });
+    
     if (!prescription) {
       return res.status(404).json({ message: 'Prescription not found' });
     }
 
+    // Check if the user is a doctor or patient
+    if (userRole === 'doctor') {
+      // Doctor can only access their own prescriptions
+      if (prescription.doctorId.toString() !== userId) {
+        return res.status(403).json({ message: 'Access denied. You do not have permission to view this prescription.' });
+      }
+    } else if (userRole === 'patient') {
+      // Patient can only access their own prescriptions
+      if (prescription.patientId.toString() !== userId) {
+        return res.status(403).json({ message: 'Access denied. You do not have permission to view this prescription.' });
+      }
+    } else {
+      // If the user role is neither doctor nor patient, deny access
+      return res.status(403).json({ message: 'Access denied. You do not have permission to view this prescription.' });
+    }
+
+    // If the user is authorized, return the prescription
     res.status(200).json(prescription);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch prescription', error: error.message });
   }
 };
+
 
 // Update Prescription by Appointment ID
 let updatePrescription = async (req, res) => {
