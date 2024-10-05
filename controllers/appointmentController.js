@@ -358,17 +358,25 @@ const getPreviousAppointments = async (req, res) => {
 
 // Get canceled appointments
 const getCanceledAppointments = async (req, res) => {
+  console.log("Fetching canceled appointments...");
   try {
+    // Fetch appointments with status 'canceled'
     const canceledAppointments = await Appointment.find({ status: 'canceled' })
       .populate('doctor patient hospital')
-      .sort({ appointmentCancelDate: -1 }); // Sort by cancel date
+      .sort({ appointmentCancelDate: -1 });
 
+    if (!canceledAppointments || canceledAppointments.length === 0) {
+      return res.status(404).json({ message: 'No canceled appointments found' });
+    }
+
+    // Success response
     res.status(200).json(canceledAppointments);
   } catch (error) {
-    console.error('Error fetching canceled appointments:', error);
-    res.status(500).json({ error: 'Server error while fetching canceled appointments.' });
+    console.error('Error fetching canceled appointments:', error.message);
+    res.status(500).json({ error: `Server error while fetching canceled appointments: ${error.message}` });
   }
 };
+
 
 // Get pending appointments
 const getPendingAppointments = async (req, res) => {
@@ -384,6 +392,50 @@ const getPendingAppointments = async (req, res) => {
   }
 };
 
+// Fetch all appointments for the authenticated doctor
+const getAppointmentsByDoctor = async (req, res) => {
+  console.log("Fetching appointments for authenticated doctor...");
+  const doctorId = req.user.id; // Get doctor ID from authenticated user
+
+  try {
+    const doctorAppointments = await Appointment.find({ doctor: doctorId })
+      .populate('doctor patient hospital')
+      .sort({ appointmentDate: -1 }); // Sort by appointment date, latest first
+
+    if (!doctorAppointments || doctorAppointments.length === 0) {
+      return res.status(404).json({ message: 'No appointments found for this doctor' });
+    }
+
+    res.status(200).json(doctorAppointments);
+  } catch (error) {
+    console.error('Error fetching doctor appointments:', error);
+    res.status(500).json({ error: 'Server error while fetching doctor appointments.' });
+  }
+};
+
+// Fetch all appointments for the authenticated patient
+const getAppointmentsByPatient = async (req, res) => {
+  console.log("Fetching appointments for authenticated patient...");
+  const patientId = req.user.id; // Get patient ID from authenticated user
+
+  try {
+    const patientAppointments = await Appointment.find({ patient: patientId })
+      .populate('doctor patient hospital')
+      .sort({ appointmentDate: -1 }); // Sort by appointment date, latest first
+
+    if (!patientAppointments || patientAppointments.length === 0) {
+      return res.status(404).json({ message: 'No appointments found for this patient' });
+    }
+
+    res.status(200).json(patientAppointments);
+  } catch (error) {
+    console.error('Error fetching patient appointments:', error);
+    res.status(500).json({ error: 'Server error while fetching patient appointments.' });
+  }
+};
+
+
+
 
 
   module.exports = {
@@ -398,4 +450,6 @@ const getPendingAppointments = async (req, res) => {
     getPreviousAppointments,
     getCanceledAppointments,
     getPendingAppointments,
+    getAppointmentsByDoctor,
+    getAppointmentsByPatient,
   }

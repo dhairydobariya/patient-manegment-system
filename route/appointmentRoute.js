@@ -11,9 +11,19 @@ const { createAppointment,
         getPreviousAppointments,
         getCanceledAppointments,
         getPendingAppointments,
+        getAppointmentsByDoctor,
+        getAppointmentsByPatient,
     } = require('../controllers/appointmentController.js');
 
 const {authenticateUser , authorizeRoles} = require('../middleware/authMiddleware')
+
+router.get('/doctor',authenticateUser,authorizeRoles('Doctor'), getAppointmentsByDoctor);
+router.get('/patient',authenticateUser,authorizeRoles('patient'), getAppointmentsByPatient);
+router.get('/scheduled',authenticateUser,authorizeRoles('Doctor'), getScheduledAppointments);
+router.get('/previous',authenticateUser,authorizeRoles('Doctor'), getPreviousAppointments);
+router.get('/canceled',authenticateUser,authorizeRoles('Doctor'), getCanceledAppointments);
+router.get('/pending',authenticateUser,authorizeRoles('Doctor'), getPendingAppointments);
+
 
 // Create a new appointment
 router.post('/' ,authenticateUser,authorizeRoles('Doctor' , 'patient'), createAppointment);
@@ -39,10 +49,6 @@ router.post('/doctors/unavailable-times',authenticateUser,authorizeRoles('Doctor
 router.delete('/doctors/unavailable-times',authenticateUser,authorizeRoles('Doctor'), removeUnavailableTime);
 
 
-router.get('/appointments/scheduled', getScheduledAppointments);
-router.get('/appointments/previous', getPreviousAppointments);
-router.get('/appointments/canceled', getCanceledAppointments);
-router.get('/appointments/pending', getPendingAppointments);
 
 
 
