@@ -69,6 +69,8 @@ const appointmentSchema = new mongoose.Schema({
     ],
     default: 'scheduled',
   },
+  teleconsultationLink: { type: String }, // Link for video session
+  teleconsultationStatus: { type: String, enum: ['not_started', 'in_progress', 'completed', 'failed'], default: 'not_started' }
 }, { timestamps: true });
 
 // Custom validation for availability of the doctor

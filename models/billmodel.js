@@ -1,71 +1,35 @@
 const mongoose = require('mongoose');
 
-// Schema for dynamic fields
-const fieldSchema = new mongoose.Schema({
-  fieldType: {
-    type: String,
-    enum: ['text', 'dropdown'], // Specify the types: text, dropdown, etc.
-    required: true
-  },
-  label: { type: String, required: true }, // Field label (e.g., Name, Email, etc.)
-  options: {
-    type: [String], // Array of dropdown options
-    required: function() {
-      return this.fieldType === 'dropdown'; // Only required if it's a dropdown
-    }
-  },
-  value: { type: mongoose.Schema.Types.Mixed }, // Store the value, can be string, number, etc.
-});
-
-// Bill schema for the patient management system
+// Schema for bill
 const billSchema = new mongoose.Schema({
-  hospitalId: { 
-    type: mongoose.Schema.Types.ObjectId, // Reference to the Hospital model
-    ref: 'Hospital', 
-    required: true 
-  },
-  doctorId: { 
-    type: mongoose.Schema.Types.ObjectId, // Reference to the Doctor model
-    ref: 'Doctor', 
-    required: true 
-  },
-  patientId: { 
-    type: mongoose.Schema.Types.ObjectId, // Reference to the Patient model
-    ref: 'Patient', 
-    required: true 
-  },
-  appointmentId: { 
-    type: mongoose.Schema.Types.ObjectId, // Reference to the Appointment model
-    ref: 'Appointment', // Required for appointment-based billing
-  },
-  description: { 
-    type: String, // Description of the services or items billed
-    required: true 
-  },
-  items: [
+  doctorName: { type: String, required: true },
+  doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true }, // Add doctor ID
+  patientName: { type: String, required: true },
+  patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true }, // Add patient ID
+  hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true }, // Add hospital ID
+  appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', required: true }, // Add appointment ID
+  billNo: { type: String, required: true, unique: true },
+  billDate: { type: Date, default: Date.now },
+  billTime: { type: String, required: true },
+  gender: { type: String, required: true },
+  age: { type: Number, required: true },
+  address: { type: String, required: true },
+  diseaseName: { type: String },
+  phoneNumber: { type: String, required: true },
+  paymentType: { type: String, enum: ['insurance', 'online', 'cash'], required: true },
+  description: [
     {
-      description: { 
-        type: String, // Description of the item/service
-        required: true 
-      },
-      amount: { 
-        type: Number, // Amount for the specific item/service
-        required: true 
-      },
+      name: { type: String, required: true },
+      amount: { type: Number, required: true },
+      qty: { type: Number, required: true },
+      total: { type: Number, required: true },
     }
   ],
-  totalAmount: { 
-    type: Number, // Total amount of the bill, sum of all item amounts
-    required: true 
-  },
-  billDate: { 
-    type: Date, // Date of the bill
-    required: true 
-  },
-  billTime: { 
-    type: String // Optional field for bill time
-  },
-  dynamicFields: [fieldSchema], // Array for additional fields created by admin
+  amount: { type: Number, required: true }, // Total of all descriptions
+  discount: { type: Number, default: 0.05 * this.amount }, // Default 5%
+  tax: { type: Number, default: 0.12 * this.amount }, // Default 12%
+  totalAmount: { type: Number, required: true }, // Final total
+  email: { type: String, required: true },
 }, { timestamps: true });
 
 const Bill = mongoose.model('Bill', billSchema);

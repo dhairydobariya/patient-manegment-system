@@ -13,6 +13,7 @@ let patientroute = require('./route/patientRoutes')
 let passwordroute = require('./route/passwordRoutes')
 let apointmentroute = require('./route/appointmentRoute.js')
 let prescriptionsroute = require('./route/prescriptionRoutes.js')
+let teleconsultationroute = require('./route/teleconsulationRoute.js')
 
 let bodyparser = require('body-parser')
 
@@ -35,6 +36,8 @@ app.use('/patient' , patientroute)
 app.use('/password' , passwordroute)
 app.use('/appointment', apointmentroute)
 app.use('/prescriptions' , prescriptionsroute)
+app.use('/teleconsultation' , teleconsultationroute)
+
 
 const server = http.createServer(app);
 const io = new Server(server, {

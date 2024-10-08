@@ -1,13 +1,14 @@
 const express = require('express');
-const { createBill , createBillByAdmin, editBill } = require('../controllers/billcontroller'); // Adjust path as needed
-
 const router = express.Router();
+const { createBillFromAppointment, manualCreateBill, updateBill } = require('../controllers/billcontroller');
 
-// Route to create a new bill
-router.post('/bills/:appointmentId', createBill);
+// Route for creating a bill from an appointment
+router.post('/create-from-appointment/:appointmentId', createBillFromAppointment);
 
-router.post('/bills/admin', createBillByAdmin);
+// Route for manual bill creation by admin
+router.post('/manual-create', manualCreateBill);
 
-router.patch('/bill/edit' , editBill)
+// Route for editing a bill
+router.put('/update/:billId', updateBill);
 
 module.exports = router;

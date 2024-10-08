@@ -1,103 +1,127 @@
-const Bill = require('../models/billmodel'); // Adjust path as needed
-const Appointment = require('../models/appointmentmodel'); // Adjust path as needed
+const Bill = require('../models/billmodel');
+const Appointment = require('../models/appointmentmodel');
 
-// Function to create a new bill based on appointment
-const createBill = async (req, res) => {
-  const { appointmentId } = req.params; // Get appointmentId from request parameters
-  const { description, items, dynamicFields } = req.body; // Extract bill details from request body
-
+// Create bill from appointment details
+exports.createBillFromAppointment = async (req, res) => {
   try {
-    // Find the appointment by ID
+    const { appointmentId } = req.params;
+
+    // Find the appointment, along with related patient, doctor, and hospital
     const appointment = await Appointment.findById(appointmentId)
-      .populate('hospitalId') // Assuming these are ObjectId references
-      .populate('doctorId')
-      .populate('patientId');
+      .populate('patientId')  // Populate patient details
+      .populate('doctorId')   // Populate doctor details
+      .populate('hospitalId'); // Populate hospital details
 
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    // Create the bill based on the appointment details
+    const patient = appointment.patientId;
+    const doctor = appointment.doctorId;
+    const hospital = appointment.hospitalId;
+
+    // Validate if the description exists in the request body
+    if (!req.body.description || !Array.isArray(req.body.description)) {
+      return res.status(400).json({ message: 'Invalid or missing description in request body' });
+    }
+
+    // Calculate total amount from the description (items/services)
+    const items = req.body.description.map(item => ({
+      name: item.name,
+      amount: item.amount,
+      qty: item.qty,
+      total: item.amount * item.qty,
+    }));
+    const totalAmount = items.reduce((acc, item) => acc + item.total, 0);
+
+    // Create the bill based on appointment details
     const bill = new Bill({
-      hospitalId: appointment.hospitalId,
-      doctorId: appointment.doctorId,
-      patientId: appointment.patientId,
-      appointmentId: appointmentId,
-      description: description,
-      items: items, // This should be an array of item objects with description and amount
-      dynamicFields: dynamicFields, // Any additional fields if necessary
-      totalAmount: items.reduce((total, item) => total + item.amount, 0), // Calculate total amount from items
+      doctorName: doctor.name,
+      doctorId: doctor._id, // Adding doctor ID
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      patientId: patient._id, // Adding patient ID
+      hospitalId: hospital._id, // Adding hospital ID
+      appointmentId: appointment._id, // Adding appointment ID
+      gender: patient.gender,
+      age: patient.age,
+      address: `${patient.address.street}, ${patient.address.city}, ${patient.address.state}`,
+      diseaseName: appointment.diseaseName,
+      phoneNumber: patient.phoneNumber,
+      paymentType: req.body.paymentType,
+      description: items,
+      amount: totalAmount,
+      discount: totalAmount * 0.05, // 5% discount
+      tax: totalAmount * 0.12, // 12% tax
+      totalAmount: totalAmount - totalAmount * 0.05 + totalAmount * 0.12,
+      email: patient.email,
     });
 
-    await bill.save(); // Save the bill to the database
-
-    return res.status(201).json(bill); // Return the created bill
+    await bill.save();
+    res.status(201).json({ message: 'Bill created successfully', bill });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Server error', error });
+    console.error('Error creating bill:', error);  // Log detailed error
+    res.status(500).json({ message: 'Error creating bill', error: error.message || error });
   }
 };
 
-// Function to create a new bill by admin
-const createBillByAdmin = async (req, res) => {
-  const { hospitalId, doctorId, patientId, description, items, dynamicFields } = req.body; // Extract bill details from request body
-
+// Manual bill creation by admin
+exports.manualCreateBill = async (req, res) => {
   try {
-    // Create the bill directly with provided information
+    const { doctorId, patientId, hospitalId, description, paymentType } = req.body;
+
+    // Calculate total amount from description
+    const items = description.map(item => ({
+      name: item.name,
+      amount: item.amount,
+      qty: item.qty,
+      total: item.amount * item.qty,
+    }));
+    const totalAmount = items.reduce((acc, item) => acc + item.total, 0);
+
+    // Create the manual bill
     const bill = new Bill({
-      hospitalId: hospitalId,
-      doctorId: doctorId,
-      patientId: patientId,
-      description: description,
-      items: items, // This should be an array of item objects with description and amount
-      dynamicFields: dynamicFields, // Any additional fields if necessary
-      totalAmount: items.reduce((total, item) => total + item.amount, 0), // Calculate total amount from items
+      doctorId, // Directly use provided doctorId
+      patientId, // Directly use provided patientId
+      hospitalId, // Directly use provided hospitalId
+      doctorName: req.body.doctorName, // Add doctor name
+      patientName: req.body.patientName, // Add patient name
+      billNo: `BILL-${Date.now()}`, // Unique bill number
+      gender: req.body.gender,
+      age: req.body.age,
+      address: req.body.address,
+      diseaseName: req.body.diseaseName,
+      phoneNumber: req.body.phoneNumber,
+      paymentType,
+      description: items,
+      amount: totalAmount,
+      discount: totalAmount * 0.05, // 5% discount
+      tax: totalAmount * 0.12, // 12% tax
+      totalAmount: totalAmount - totalAmount * 0.05 + totalAmount * 0.12,
+      email: req.body.email,
     });
 
-    await bill.save(); // Save the bill to the database
-
-    return res.status(201).json(bill); // Return the created bill
+    await bill.save();
+    res.status(201).json({ message: 'Bill created successfully', bill });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Server error', error });
+    console.error('Error creating bill:', error);
+    res.status(500).json({ message: 'Error creating bill', error: error.message || error });
   }
 };
 
-// Edit Bill Function
-let editBill = async (req, res) => {
+// Update bill function
+exports.updateBill = async (req, res) => {
   try {
-    const billId = req.params.id; // Get the bill ID from the URL parameters
-    const { dynamicFieldsToAdd, dynamicFieldsToRemove, ...updatedData } = req.body; // Get updated data from the request body
+    const { billId } = req.params;
+    const updates = req.body;
 
-    // Find the bill by ID
-    const bill = await Bill.findById(billId);
-    if (!bill) {
+    const updatedBill = await Bill.findByIdAndUpdate(billId, updates, { new: true });
+
+    if (!updatedBill) {
       return res.status(404).json({ message: 'Bill not found' });
     }
 
-    // Update static fields
-    Object.assign(bill, updatedData); // Merge updated fields into the bill
-
-    // Add new dynamic fields
-    if (dynamicFieldsToAdd && Array.isArray(dynamicFieldsToAdd)) {
-      bill.dynamicFields.push(...dynamicFieldsToAdd);
-    }
-
-    // Remove specified dynamic fields
-    if (dynamicFieldsToRemove && Array.isArray(dynamicFieldsToRemove)) {
-      bill.dynamicFields = bill.dynamicFields.filter(field => !dynamicFieldsToRemove.includes(field._id.toString()));
-    }
-
-    // Save the updated bill
-    const updatedBill = await bill.save();
-
-    return res.status(200).json({ message: 'Bill updated successfully', bill: updatedBill });
+    res.status(200).json({ message: 'Bill updated successfully', updatedBill });
   } catch (error) {
-    return res.status(500).json({ message: 'Error updating bill', error: error.message });
+    res.status(500).json({ message: 'Error updating bill', error });
   }
 };
-
-
-module.exports = { createBill, createBillByAdmin , editBill };
-
-
