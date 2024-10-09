@@ -17,6 +17,7 @@ const billSchema = new mongoose.Schema({
   diseaseName: { type: String },
   phoneNumber: { type: String, required: true },
   paymentType: { type: String, enum: ['insurance', 'online', 'cash'], required: true },
+  paymentStatus: { type: String, enum: ['paid', 'unpaid'], default: 'unpaid' }, // Added paymentStatus field
   description: [
     {
       name: { type: String, required: true },

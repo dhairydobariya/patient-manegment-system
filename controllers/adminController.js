@@ -318,22 +318,32 @@ const getAdminDashboardData = async (req, res) => {
       const adminId = req.user.id;  // Extracted from JWT or session
       const admin = await Admin.findById(adminId).populate('hospital');
       const hospitalId = admin.hospital._id;
+        console.log(hospitalId);
         
       const { searchQuery, filterBy } = req.query; // Get search query and filter from frontend
-    
+        
+      console.log('searchQuery:', searchQuery); // Log search query
+      console.log('filterBy:', filterBy); // Log filter type
+
       let searchResults = [];
   
       if (filterBy === 'all') {
         // 1. Search in both Doctors and Patients
         const doctors = await Doctor.find({
-          hospital: hospitalId,
+            currentHospital: hospitalId,
           name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
         });
+
+        console.log('doctors:', doctors); // Log found doctors
+
   
         const patients = await Patient.find({
           hospital: hospitalId,
           name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
         });
+
+        console.log('patients:', patients); // Log found patients
+
   
         if (doctors.length > 0) {
           // If matched with a doctor, return all patients associated with this doctor
@@ -416,6 +426,55 @@ const getAdminDashboardData = async (req, res) => {
     }
   };
 
+  let datadeshboard =async (req, res) => {
+    try {
+        // Fetch total patients, doctors, and appointments
+        const totalPatients = await Patient.countDocuments();
+        const totalDoctors = await Doctor.countDocuments();
+        const totalAppointments = await Appointment.countDocuments();
+
+        // Fetch bills (pending)
+        const pendingBills = await Bill.find({ paymentStatus: 'pending' }).populate('patientId').populate('doctorId');
+
+        // Fetch patient statistics (yearly, monthly, weekly)
+        const patientStats = await getPatientStatistics(); // Create a helper function for this
+
+        // Fetch today's appointments
+        const today = new Date();
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+        const todayAppointments = await Appointment.find({
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay }
+        }).populate('patient').populate('doctor');
+
+        // Summary of patients
+        const newPatientsCount = await Patient.countDocuments({ createdAt: { $gte: new Date(new Date() - 30*24*60*60*1000) } }); // Last 30 days
+        const totalPatientsCount = await Patient.countDocuments();
+        const oldPatientsCount = totalPatientsCount - newPatientsCount;
+
+        // Prepare the response
+        const dashboardData = {
+            totalPatients,
+            totalDoctors,
+            totalAppointments,
+            pendingBills,
+            patientStats,
+            todayAppointments,
+            patientSummary: {
+                newPatients: newPatientsCount,
+                oldPatients: oldPatientsCount,
+                totalPatients: totalPatientsCount
+            }
+        };
+
+        res.status(200).json(dashboardData);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+
 // Helper function to calculate patient statistics
 const getPatientStatistics = async (hospitalId) => {
   const now = new Date();
@@ -462,4 +521,5 @@ module.exports = {
     updateprofile,
     changeAdminPassword,
     getAdminDashboardData,
+    datadeshboard
 };

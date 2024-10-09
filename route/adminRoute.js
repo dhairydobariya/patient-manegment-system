@@ -41,5 +41,6 @@
 
 
     router.get('/admin-deshboard' , authenticateUser,authorizeRoles('admin'), adminController.getAdminDashboardData)
+    router.get('/admindata' ,authenticateUser,authorizeRoles('admin'), adminController.datadeshboard)
 
     module.exports = router;
