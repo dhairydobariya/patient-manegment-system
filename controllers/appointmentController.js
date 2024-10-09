@@ -244,17 +244,21 @@ const getAppointment = async (req, res) => {
   
   const deleteAppointment = async (req, res) => {
     try {
-      const appointment = await Appointment.findById(req.params.id);
+      // Find and delete the appointment by ID
+      const appointment = await Appointment.findByIdAndDelete(req.params.id);
+  
+      // Check if appointment exists
       if (!appointment) {
         return res.status(404).json({ error: 'Appointment not found.' });
       }
   
-      await appointment.remove();
       res.status(200).json({ message: 'Appointment successfully deleted.' });
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: 'Server error while deleting appointment.' });
     }
   };
+  
 
 // Add unavailable time
 const addUnavailableTime = async (req, res) => {
@@ -309,9 +313,9 @@ const removeUnavailableTime = async (req, res) => {
     if (!unavailableTime) {
       return res.status(404).json({ error: 'Unavailable time not found.' });
     }
-    
-    // Remove the unavailable time
-    unavailableTime.remove(); 
+
+    // Remove the unavailable time using `pull()` method
+    doctor.unavailableTimes.pull({ _id: unavailableTimeId });
     await doctor.save();
 
     res.status(200).json({ message: 'Unavailable time successfully removed.', doctor });
@@ -320,6 +324,7 @@ const removeUnavailableTime = async (req, res) => {
     res.status(500).json({ error: 'Server error while removing unavailable time.' });
   }
 };
+
 
 
 // Get scheduled appointments

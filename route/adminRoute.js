@@ -31,12 +31,15 @@
     router.post('/create-doctor',authenticateUser,authorizeRoles('admin'), adminController.createDoctor); // New route for creating a doctor
     router.delete('/doctor/:id', adminController.deleteDoctorById);
 
-
+    
 
 
     //profile
     router.get('/profile' ,authenticateUser,authorizeRoles('admin'), adminController.getprofile )
     router.patch('/profile' ,authenticateUser,authorizeRoles('admin'), adminController.updateprofile )
     router.post('/profile/changepass' , authenticateUser,authorizeRoles('admin'), adminController.changeAdminPassword)
+
+
+    router.get('/admin-deshboard' , authenticateUser,authorizeRoles('admin'), adminController.getAdminDashboardData)
 
     module.exports = router;

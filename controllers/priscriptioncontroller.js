@@ -55,10 +55,11 @@ const getAllPrescriptions = async (req, res) => {
   try {
     const userId = req.user.id; // Assuming req.user contains the logged-in user's details
     const userRole = req.user.role; // Assuming req.user also contains the user's role (doctor or patient)
-
+    console.log(userRole);
+    
     let prescriptions;
 
-    if (userRole === 'doctor') {
+    if (userRole === 'Doctor') {
       // If the user is a doctor, return prescriptions where the doctorId matches
       prescriptions = await Prescription.find({ doctorId: userId });
     } else if (userRole === 'patient') {
@@ -90,7 +91,7 @@ let getPrescriptionByAppointment = async (req, res) => {
     }
 
     // Check if the user is a doctor or patient
-    if (userRole === 'doctor') {
+    if (userRole === 'Doctor') {
       // Doctor can only access their own prescriptions
       if (prescription.doctorId.toString() !== userId) {
         return res.status(403).json({ message: 'Access denied. You do not have permission to view this prescription.' });

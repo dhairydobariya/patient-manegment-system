@@ -8,31 +8,45 @@ exports.createBillFromAppointment = async (req, res) => {
 
     // Find the appointment, along with related patient, doctor, and hospital
     const appointment = await Appointment.findById(appointmentId)
-      .populate('patientId')  // Populate patient details
-      .populate('doctorId')   // Populate doctor details
-      .populate('hospitalId'); // Populate hospital details
+      .populate('patient')  // Populate patient details
+      .populate('doctor')   // Populate doctor details
+      .populate('hospital'); // Populate hospital details
 
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    const patient = appointment.patientId;
-    const doctor = appointment.doctorId;
-    const hospital = appointment.hospitalId;
+    const patient = appointment.patient;
+    const doctor = appointment.doctor;
+    const hospital = appointment.hospital;
 
     // Validate if the description exists in the request body
     if (!req.body.description || !Array.isArray(req.body.description)) {
       return res.status(400).json({ message: 'Invalid or missing description in request body' });
     }
 
-    // Calculate total amount from the description (items/services)
-    const items = req.body.description.map(item => ({
-      name: item.name,
-      amount: item.amount,
-      qty: item.qty,
-      total: item.amount * item.qty,
-    }));
+    // Check if each item in the description array has the necessary fields
+    const items = req.body.description.map(item => {
+      if (!item.name || !item.amount || !item.qty) {
+        throw new Error('Each item must have a name, amount, and qty');
+      }
+
+      return {
+        name: item.name,
+        amount: item.amount,
+        qty: item.qty,
+        total: item.amount * item.qty,
+      };
+    });
+
     const totalAmount = items.reduce((acc, item) => acc + item.total, 0);
+
+    // Generate bill number (this could be customized as needed)
+    const billNo = `BILL-${Date.now()}`;
+    console.log('Generated Bill No:', billNo);  // Debugging to ensure billNo is created
+
+    // Get the current time for billTime
+    const billTime = new Date().toLocaleTimeString();
 
     // Create the bill based on appointment details
     const bill = new Bill({
@@ -54,6 +68,9 @@ exports.createBillFromAppointment = async (req, res) => {
       tax: totalAmount * 0.12, // 12% tax
       totalAmount: totalAmount - totalAmount * 0.05 + totalAmount * 0.12,
       email: patient.email,
+      billNo: billNo, // Adding generated bill number
+      billTime: billTime, // Adding generated bill time
+      billDate: new Date(), // Set the current date
     });
 
     await bill.save();
@@ -63,6 +80,7 @@ exports.createBillFromAppointment = async (req, res) => {
     res.status(500).json({ message: 'Error creating bill', error: error.message || error });
   }
 };
+
 
 // Manual bill creation by admin
 exports.manualCreateBill = async (req, res) => {

@@ -1,4 +1,6 @@
 const Doctor = require('../models/doctorModel');
+const bcrypt = require('bcrypt');
+
 
 // Doctor Profile Function
 let profile = async (req, res) => {
@@ -36,20 +38,33 @@ let profile = async (req, res) => {
 };
 
 let updateProfile = async (req, res) => {
-    const { phoneNumber, hospitalName, gender, country, state, city } = req.body;
-
+    const { firstName, lastName, phoneNumber, hospitalName, gender, country, state, city } = req.body;
+    
     try {
         // Get the doctor ID from the authenticated user (req.user.id)
         const doctorId = req.user.id;
 
         // Prepare the update object
         const updateData = {};
+
+        // Update name (if firstName or lastName is provided)
+        if (firstName || lastName) {
+            const doctor = await Doctor.findById(doctorId);
+            const fullName = `${firstName || doctor.name.split(' ')[0]} ${lastName || doctor.name.split(' ')[1] || ''}`;
+            updateData.name = fullName.trim();
+        }
+
         if (phoneNumber) updateData.phoneNumber = phoneNumber;
         if (hospitalName) updateData.currentHospital = hospitalName; // Adjust this if hospital ID is provided
         if (gender) updateData.gender = gender;
-        if (country) updateData.address.country = country;
-        if (state) updateData.address.state = state;
-        if (city) updateData.address.city = city;
+
+        // Update address fields properly
+        if (country || state || city) {
+            updateData.address = {}; // Initialize address object
+            if (country) updateData.address.country = country;
+            if (state) updateData.address.state = state;
+            if (city) updateData.address.city = city;
+        }
 
         // Update the doctor's profile
         const updatedDoctor = await Doctor.findByIdAndUpdate(doctorId, updateData, { new: true });
@@ -62,7 +77,7 @@ let updateProfile = async (req, res) => {
         // Create a response object with only the necessary fields
         const doctorProfile = {
             firstName: updatedDoctor.name.split(' ')[0],
-            lastName: updatedDoctor.name.split(' ')[1],
+            lastName: updatedDoctor.name.split(' ')[1] || '',
             email: updatedDoctor.email,
             phoneNumber: updatedDoctor.phoneNumber,
             hospitalName: updatedDoctor.currentHospital ? updatedDoctor.currentHospital.name : 'N/A',
@@ -79,6 +94,7 @@ let updateProfile = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
 
 const changeDoctorPassword = async (req, res) => {
     const { currentPassword, newPassword, confirmPassword } = req.body;

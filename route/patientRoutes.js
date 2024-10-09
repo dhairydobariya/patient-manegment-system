@@ -11,9 +11,9 @@ router.post('/register', patientController.register);
 
 
 // Get Patient Profile
-router.get('/profile', authenticateUser,authorizeRoles("Patient") ,patientController.getPatientProfile);
+router.get('/profile', authenticateUser,authorizeRoles("patient") ,patientController.getPatientProfile);
 
 // Update Patient Profile
-router.patch('/profile', authenticateUser,authorizeRoles("Patient"), patientController.updatePatientProfile);
+router.patch('/profile', authenticateUser,authorizeRoles("patient"), patientController.updatePatientProfile);
 
 module.exports = router;

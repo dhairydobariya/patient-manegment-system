@@ -41,8 +41,9 @@ router.patch('/:id/cancel' ,authenticateUser,authorizeRoles('patient'), cancelAp
 router.delete('/:id' ,authenticateUser,authorizeRoles('Doctor' , 'patient'), deleteAppointment);
 
 
-
 router.post('/doctors/unavailable-times',authenticateUser,authorizeRoles('Doctor'), addUnavailableTime);
+
+
 
 
 // Route for removing unavailable time

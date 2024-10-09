@@ -2,6 +2,10 @@ const { body, validationResult } = require('express-validator');
 const usermodel = require('../models/adminModel');
 const Doctor = require('../models/doctorModel');
 const Hospital = require('../models/hospitalModel');
+const Patient = require('../models/patientModel');
+const Appointment = require('../models/appointmentmodel');
+const Admin = require('../models/adminModel');
+const Bill = require('../models/billmodel');
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -308,6 +312,140 @@ const changeAdminPassword = async (req, res) => {
     }
 };
 
+// Admin Dashboard API with Search Functionality
+const getAdminDashboardData = async (req, res) => {
+    try {
+      const adminId = req.user.id;  // Extracted from JWT or session
+      const admin = await Admin.findById(adminId).populate('hospital');
+      const hospitalId = admin.hospital._id;
+        
+      const { searchQuery, filterBy } = req.query; // Get search query and filter from frontend
+    
+      let searchResults = [];
+  
+      if (filterBy === 'all') {
+        // 1. Search in both Doctors and Patients
+        const doctors = await Doctor.find({
+          hospital: hospitalId,
+          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
+        });
+  
+        const patients = await Patient.find({
+          hospital: hospitalId,
+          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
+        });
+  
+        if (doctors.length > 0) {
+          // If matched with a doctor, return all patients associated with this doctor
+          const doctorIds = doctors.map(doctor => doctor._id);
+          const patientAppointments = await Appointment.find({
+            doctor: { $in: doctorIds },
+            hospital: hospitalId
+          }).populate('patient doctor');
+  
+          searchResults = patientAppointments.map(appointment => ({
+            patientName: appointment.patient.name,
+            patientIssue: appointment.patient.issue,
+            doctorName: appointment.doctor.name,
+            diseaseName: appointment.patient.diseaseName,
+            appointmentTime: appointment.appointmentDate,
+            appointmentType: appointment.appointmentType
+          }));
+        }
+  
+        if (patients.length > 0) {
+          // If matched with a patient, return patient data
+          const patientAppointments = await Appointment.find({
+            patient: { $in: patients.map(patient => patient._id) },
+            hospital: hospitalId
+          }).populate('patient doctor');
+  
+          searchResults.push(...patientAppointments.map(appointment => ({
+            patientName: appointment.patient.name,
+            patientIssue: appointment.patient.issue,
+            doctorName: appointment.doctor.name,
+            diseaseName: appointment.patient.diseaseName,
+            appointmentTime: appointment.appointmentDate,
+            appointmentType: appointment.appointmentType
+          })));
+        }
+  
+      } else if (filterBy === 'doctor') {
+        // 2. Search in Doctors only
+        const doctors = await Doctor.find({
+          hospital: hospitalId,
+          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
+        });
+  
+        searchResults = doctors.map(doctor => ({
+          doctorName: doctor.name,
+          gender: doctor.gender,
+          qualification: doctor.qualification,
+          specialty: doctor.specialty,
+          workingTime: doctor.workingTime,
+          patientCheckupTime: doctor.checkupTime,
+          breakTime: doctor.breakTime,
+        }));
+  
+      } else if (filterBy === 'patient') {
+        // 3. Search in Patients only
+        const patients = await Patient.find({
+          hospital: hospitalId,
+          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
+        });
+  
+        const patientAppointments = await Appointment.find({
+          patient: { $in: patients.map(patient => patient._id) },
+          hospital: hospitalId
+        }).populate('patient doctor');
+  
+        searchResults = patientAppointments.map(appointment => ({
+          patientName: appointment.patient.name,
+          patientIssue: appointment.patient.issue,
+          doctorName: appointment.doctor.name,
+          diseaseName: appointment.patient.diseaseName,
+          appointmentTime: appointment.appointmentDate,
+          appointmentType: appointment.appointmentType
+        }));
+      }
+  
+      return res.status(200).json({ searchResults });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+
+// Helper function to calculate patient statistics
+const getPatientStatistics = async (hospitalId) => {
+  const now = new Date();
+
+  // For the past year
+  const oneYearAgo = new Date(now.setFullYear(now.getFullYear() - 1));
+  const yearlyPatients = await Patient.countDocuments({
+    hospital: hospitalId,
+    createdAt: { $gte: oneYearAgo },
+  });
+
+  // For the past month
+  const oneMonthAgo = new Date(now.setMonth(now.getMonth() - 1));
+  const monthlyPatients = await Patient.countDocuments({
+    hospital: hospitalId,
+    createdAt: { $gte: oneMonthAgo },
+  });
+
+  // For the past week
+  const oneWeekAgo = new Date(now.setDate(now.getDate() - 7));
+  const weeklyPatients = await Patient.countDocuments({
+    hospital: hospitalId,
+    createdAt: { $gte: oneWeekAgo },
+  });
+
+  return { yearlyPatients, monthlyPatients, weeklyPatients };
+};
+
+
+  
 
 
 module.exports = {
@@ -323,4 +461,5 @@ module.exports = {
     getprofile,
     updateprofile,
     changeAdminPassword,
+    getAdminDashboardData,
 };

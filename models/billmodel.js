@@ -26,11 +26,25 @@ const billSchema = new mongoose.Schema({
     }
   ],
   amount: { type: Number, required: true }, // Total of all descriptions
-  discount: { type: Number, default: 0.05 * this.amount }, // Default 5%
-  tax: { type: Number, default: 0.12 * this.amount }, // Default 12%
+  discount: { type: Number }, // Default 5%
+  tax: { type: Number }, // Default 12%
   totalAmount: { type: Number, required: true }, // Final total
   email: { type: String, required: true },
 }, { timestamps: true });
+
+// Pre-save hook to calculate discount, tax, and totalAmount
+billSchema.pre('save', function (next) {
+  // Apply discount and tax based on the amount
+  const discount = this.amount * 0.05; // 5% discount
+  const tax = this.amount * 0.12; // 12% tax
+  this.discount = discount;
+  this.tax = tax;
+
+  // Calculate the total amount after discount and adding tax
+  this.totalAmount = this.amount - discount + tax;
+
+  next();
+});
 
 const Bill = mongoose.model('Bill', billSchema);
 module.exports = Bill;
