@@ -7,10 +7,12 @@ const { createAppointment,
         deleteAppointment,
         addUnavailableTime ,
         removeUnavailableTime,
-        getScheduledAppointments,
+        // getScheduledAppointments,
+        getTodayAppointments,
         getPreviousAppointments,
         getCanceledAppointments,
-        getPendingAppointments,
+        getUpcomingAppointments,
+        // getPendingAppointments,
         getAppointmentsByDoctor,
         getAppointmentsByPatient,
     } = require('../controllers/appointmentController.js');
@@ -19,10 +21,7 @@ const {authenticateUser , authorizeRoles} = require('../middleware/authMiddlewar
 
 router.get('/doctor',authenticateUser,authorizeRoles('Doctor'), getAppointmentsByDoctor);
 router.get('/patient',authenticateUser,authorizeRoles('patient'), getAppointmentsByPatient);
-router.get('/scheduled',authenticateUser,authorizeRoles('Doctor'), getScheduledAppointments);
-router.get('/previous',authenticateUser,authorizeRoles('Doctor'), getPreviousAppointments);
-router.get('/canceled',authenticateUser,authorizeRoles('Doctor'), getCanceledAppointments);
-router.get('/pending',authenticateUser,authorizeRoles('Doctor'), getPendingAppointments);
+
 
 
 // Create a new appointment
@@ -51,6 +50,26 @@ router.delete('/doctors/unavailable-times',authenticateUser,authorizeRoles('Doct
 
 
 
+//patient-manegment
+// GET Today's appointments
+router.get('/appointments/today',authenticateUser,authorizeRoles('Doctor' ,'admin') , getTodayAppointments);
+
+// GET Previous appointments
+router.get('/appointments/previous',authenticateUser,authorizeRoles('Doctor' , 'admin') , getPreviousAppointments);
+
+// GET Upcoming appointments
+router.get('/appointments/upcoming',authenticateUser,authorizeRoles('Doctor' , 'admin') , getUpcomingAppointments);
+
+// GET Canceled appointments
+router.get('/appointments/canceled',authenticateUser,authorizeRoles('Doctor' , 'admin') , getCanceledAppointments);
+
 
 
 module.exports = router;
+
+
+
+// router.get('/scheduled',authenticateUser,authorizeRoles('Doctor'), getScheduledAppointments);
+// router.get('/previous',authenticateUser,authorizeRoles('Doctor'), getPreviousAppointments);
+// router.get('/canceled',authenticateUser,authorizeRoles('Doctor'), getCanceledAppointments);
+// router.get('/pending',authenticateUser,authorizeRoles('Doctor'), getPendingAppointments);

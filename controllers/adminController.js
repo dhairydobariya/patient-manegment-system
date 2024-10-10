@@ -315,116 +315,84 @@ const changeAdminPassword = async (req, res) => {
 // Admin Dashboard API with Search Functionality
 const getAdminDashboardData = async (req, res) => {
     try {
-      const adminId = req.user.id;  // Extracted from JWT or session
+      const adminId = req.user.id; // Extracted from JWT or session
       const admin = await Admin.findById(adminId).populate('hospital');
       const hospitalId = admin.hospital._id;
-        console.log(hospitalId);
-        
+  
       const { searchQuery, filterBy } = req.query; // Get search query and filter from frontend
-        
-      console.log('searchQuery:', searchQuery); // Log search query
-      console.log('filterBy:', filterBy); // Log filter type
-
+  
       let searchResults = [];
   
-      if (filterBy === 'all') {
-        // 1. Search in both Doctors and Patients
+      // Handle the 'all' filter - search in both Doctors and Patients
+      if (filterBy === 'all' || filterBy === 'doctor') {
+        // 1. Search Doctors
         const doctors = await Doctor.find({
-            currentHospital: hospitalId,
-          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
+          currentHospital: hospitalId,  // Filter by hospital
+          name: { $regex: searchQuery, $options: 'i' }  // Case-insensitive match for name
         });
-
-        console.log('doctors:', doctors); // Log found doctors
-
-  
-        const patients = await Patient.find({
-          hospital: hospitalId,
-          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
-        });
-
-        console.log('patients:', patients); // Log found patients
-
   
         if (doctors.length > 0) {
-          // If matched with a doctor, return all patients associated with this doctor
           const doctorIds = doctors.map(doctor => doctor._id);
-          const patientAppointments = await Appointment.find({
+          const doctorAppointments = await Appointment.find({
             doctor: { $in: doctorIds },
             hospital: hospitalId
           }).populate('patient doctor');
   
-          searchResults = patientAppointments.map(appointment => ({
-            patientName: appointment.patient.name,
-            patientIssue: appointment.patient.issue,
+          // Map doctor results to the response format
+          searchResults = searchResults.concat(doctorAppointments.map(appointment => ({
+            type: 'doctor',
+            patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+            patientIssue: appointment.patient.patientIssue,
             doctorName: appointment.doctor.name,
             diseaseName: appointment.patient.diseaseName,
             appointmentTime: appointment.appointmentDate,
-            appointmentType: appointment.appointmentType
-          }));
+            appointmentType: appointment.appointmentType,
+          })));
         }
+      }
+  
+      if (filterBy === 'all' || filterBy === 'patient') {
+        // 2. Search Patients
+        const patients = await Patient.find({
+          currentHospital: hospitalId,  // Filter by hospital
+          $or: [
+            { firstName: { $regex: searchQuery, $options: 'i' } },  // Case-insensitive match for first name
+            { lastName: { $regex: searchQuery, $options: 'i' } }    // Case-insensitive match for last name
+          ]
+        });
   
         if (patients.length > 0) {
-          // If matched with a patient, return patient data
+          const patientIds = patients.map(patient => patient._id);
           const patientAppointments = await Appointment.find({
-            patient: { $in: patients.map(patient => patient._id) },
+            patient: { $in: patientIds },
             hospital: hospitalId
           }).populate('patient doctor');
   
-          searchResults.push(...patientAppointments.map(appointment => ({
-            patientName: appointment.patient.name,
-            patientIssue: appointment.patient.issue,
+          // Map patient results to the response format
+          searchResults = searchResults.concat(patientAppointments.map(appointment => ({
+            type: 'patient',
+            patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+            patientIssue: appointment.patient.patientIssue,
             doctorName: appointment.doctor.name,
             diseaseName: appointment.patient.diseaseName,
             appointmentTime: appointment.appointmentDate,
-            appointmentType: appointment.appointmentType
+            appointmentType: appointment.appointmentType,
           })));
         }
-  
-      } else if (filterBy === 'doctor') {
-        // 2. Search in Doctors only
-        const doctors = await Doctor.find({
-          hospital: hospitalId,
-          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
-        });
-  
-        searchResults = doctors.map(doctor => ({
-          doctorName: doctor.name,
-          gender: doctor.gender,
-          qualification: doctor.qualification,
-          specialty: doctor.specialty,
-          workingTime: doctor.workingTime,
-          patientCheckupTime: doctor.checkupTime,
-          breakTime: doctor.breakTime,
-        }));
-  
-      } else if (filterBy === 'patient') {
-        // 3. Search in Patients only
-        const patients = await Patient.find({
-          hospital: hospitalId,
-          name: { $regex: searchQuery, $options: 'i' }, // Case-insensitive match
-        });
-  
-        const patientAppointments = await Appointment.find({
-          patient: { $in: patients.map(patient => patient._id) },
-          hospital: hospitalId
-        }).populate('patient doctor');
-  
-        searchResults = patientAppointments.map(appointment => ({
-          patientName: appointment.patient.name,
-          patientIssue: appointment.patient.issue,
-          doctorName: appointment.doctor.name,
-          diseaseName: appointment.patient.diseaseName,
-          appointmentTime: appointment.appointmentDate,
-          appointmentType: appointment.appointmentType
-        }));
       }
   
+      if (searchResults.length === 0) {
+        return res.status(404).json({ message: "No results found for the given search query" });
+      }
+  
+      // Send the combined search results
       return res.status(200).json({ searchResults });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: 'Server Error', error });
     }
   };
+
 
   let datadeshboard =async (req, res) => {
     try {
@@ -504,9 +472,303 @@ const getPatientStatistics = async (hospitalId) => {
 };
 
 
+const getDoctorsByHospital = async (req, res) => {
+  try {
+    const adminId = req.user.id; // Extract the admin ID from the request
+    // Fetch the admin to get their hospital ID
+    const admin = await Admin.findById(adminId).populate('hospital');
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    const hospitalId = admin.hospital._id; // Get the hospital ID
+
+    // Fetch all doctors associated with the hospital
+    const doctors = await Doctor.find({ currentHospital: hospitalId });
+
+    // Count total number of doctors
+    const totalDoctors = doctors.length;
+
+    // Respond with the list of doctors and the count
+    return res.status(200).json({
+      totalDoctors,
+      doctors
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
+const getDoctorById = async (req, res) => {
+    try {
+      const adminId = req.user.id; // Extract the admin ID from the request
+      const doctorId = req.params.id; // Get the doctor ID from the request parameters
   
+      // Fetch the admin to get their hospital ID
+      const admin = await Admin.findById(adminId).populate('hospital');
+  
+      if (!admin) {
+        return res.status(404).json({ message: 'Admin not found' });
+      }
+  
+      const hospitalId = admin.hospital._id; // Get the hospital ID
+  
+      // Fetch the doctor by ID and ensure they belong to the same hospital
+      const doctor = await Doctor.findOne({
+        _id: doctorId,
+        currentHospital: hospitalId,
+      });
+  
+      if (!doctor) {
+        return res.status(404).json({ message: 'Doctor not found in this hospital' });
+      }
+  
+      // Respond with the doctor details
+      return res.status(200).json({
+        doctor,
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: 'Server Error', error });
+    }
+  };
 
 
+//patient-manegment
+
+const getTodayAppointments = async (req, res) => {
+    try {
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+  
+      const appointments = await Appointment.find({
+        appointmentDate: {
+          $gte: startOfDay,
+          $lte: endOfDay
+        },
+        status: 'scheduled'
+      })
+        .populate('patient doctor', 'name issue diseaseName')
+        .exec();
+  
+      res.status(200).json({ appointments });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+  
+  // Get previous appointments
+  const getPreviousAppointments = async (req, res) => {
+    try {
+      const today = new Date();
+  
+      const appointments = await Appointment.find({
+        appointmentDate: { $lt: today },
+        status: { $ne: 'canceled' }
+      })
+        .populate('patient doctor', 'name issue diseaseName')
+        .exec();
+  
+      res.status(200).json({ appointments });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+  
+  // Get upcoming appointments
+  const getUpcomingAppointments = async (req, res) => {
+    try {
+      const today = new Date();
+  
+      const appointments = await Appointment.find({
+        appointmentDate: { $gt: today },
+        status: 'scheduled'
+      })
+        .populate('patient doctor', 'name issue diseaseName')
+        .exec();
+  
+      res.status(200).json({ appointments });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+  
+  // Get canceled appointments
+  const getCanceledAppointments = async (req, res) => {
+    try {
+      const appointments = await Appointment.find({
+        status: 'canceled'
+      })
+        .populate('patient doctor', 'name issue diseaseName')
+        .exec();
+  
+      res.status(200).json({ appointments });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+
+  // Fetch appointment details by ID
+const getAppointmentDetails = async (req, res) => {
+    try {
+      const { appointmentId } = req.params;
+  
+      const appointment = await Appointment.findById(appointmentId)
+        .populate('patient doctor', 'name phoneNumber age gender address') // Populating required fields from patient and doctor
+        .exec();
+  
+      if (!appointment) {
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+  
+      // Extract the required data
+      const appointmentDetails = {
+        appointmentType: appointment.appointmentType,
+        appointmentDate: appointment.appointmentDate,
+        appointmentTime: appointment.appointmentTime,
+        patientName: appointment.patient.name,
+        patientPhoneNumber: appointment.patient.phoneNumber,
+        patientAge: appointment.patient.age,
+        patientGender: appointment.patient.gender,
+        patientIssue: appointment.patientIssue,
+        diseaseName: appointment.diseaseName,
+        doctorName: appointment.doctor.name,
+        patientAddress: appointment.patient.address, // Assuming address is a string; adjust as needed
+        // Add any other fields you want to include
+      };
+  
+      res.status(200).json({ appointmentDetails });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };
+  
+ 
+  const getReportAnalytics = async (req, res) => {
+    try {
+      // Total patients
+      const totalPatients = await Patient.countDocuments();
+  
+      // Repeat patients (those with more than one appointment)
+      const repeatPatientsCount = await Appointment.aggregate([
+        {
+          $group: {
+            _id: "$patient", // Group by patient ID
+            appointmentCount: { $sum: 1 }
+          }
+        },
+        {
+          $match: {
+            appointmentCount: { $gt: 1 } // Only include patients with more than one appointment
+          }
+        },
+        {
+          $count: "repeatPatientsCount" // Count the number of repeat patients
+        }
+      ]);
+  
+      const repeatPatients = repeatPatientsCount.length > 0 ? repeatPatientsCount[0].repeatPatientsCount : 0;
+  
+      // Appointments monthly and yearly
+      const monthlyAppointments = await Appointment.aggregate([
+        {
+          $group: {
+            _id: { $month: "$appointmentDate" }, // Group by month
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      const yearlyAppointments = await Appointment.aggregate([
+        {
+          $group: {
+            _id: { $year: "$appointmentDate" }, // Group by year
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // Patient summary for new and old patients
+      const newPatientsDaily = await Patient.countDocuments({ createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } });
+      const newPatientsWeekly = await Patient.countDocuments({ createdAt: { $gte: new Date(new Date().setDate(new Date().getDate() - 7)) } });
+  
+      // Patient age distribution
+      const ageDistribution = await Patient.aggregate([
+        {
+          $bucket: {
+            groupBy: "$age", // Age field
+            boundaries: [0, 2, 13, 20, 40, 60, Infinity], // Age ranges
+            default: "60+", // Default for ages above 60
+            output: {
+              count: { $sum: 1 } // Count patients in each range
+            }
+          }
+        }
+      ]);
+  
+      // Count of patients by specialty type
+      const specialtyCounts = await Appointment.aggregate([
+        {
+          $lookup: {
+            from: 'doctors', // Collection name of the Doctor model
+            localField: 'doctor',
+            foreignField: '_id',
+            as: 'doctorInfo'
+          }
+        },
+        {
+          $unwind: '$doctorInfo' // Flatten the array
+        },
+        {
+          $group: {
+            _id: '$doctorInfo.specialtyType', // Group by specialty type
+            patientCount: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // Count of doctors by specialty type
+      const doctorCounts = await Doctor.aggregate([
+        {
+          $group: {
+            _id: '$specialtyType', // Group by specialty type
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // Assemble the report data
+      const reportData = {
+        totalPatients,
+        repeatPatients,
+        monthlyAppointments,
+        yearlyAppointments,
+        newPatients: {
+          daily: newPatientsDaily,
+          weekly: newPatientsWeekly
+        },
+        ageDistribution,
+        specialtyCounts,
+        doctorCounts
+      };
+  
+      res.status(200).json(reportData);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server Error', error });
+    }
+  };  
+
+
+  
 module.exports = {
     defaults,
     register,
@@ -521,5 +783,13 @@ module.exports = {
     updateprofile,
     changeAdminPassword,
     getAdminDashboardData,
-    datadeshboard
+    datadeshboard,
+    getDoctorsByHospital,
+    getDoctorById,
+    getTodayAppointments,
+    getPreviousAppointments,
+    getUpcomingAppointments,
+    getCanceledAppointments,
+    getAppointmentDetails,
+    getReportAnalytics,
 };

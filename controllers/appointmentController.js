@@ -1,6 +1,6 @@
 const Appointment = require('../models/appointmentmodel');
 const Doctor = require('../models/doctorModel');
-
+const Patient = require('../models/patientModel');
 
 const getTimeDate = (date, time) => {
   const [hours, minutes] = time.split(':');
@@ -328,74 +328,7 @@ const removeUnavailableTime = async (req, res) => {
 
 
 // Get scheduled appointments
-const getScheduledAppointments = async (req, res) => {
-  try {
-    const scheduledAppointments = await Appointment.find({ status: 'scheduled' })
-      .populate('doctor patient hospital')
-      .sort({ appointmentDate: 1, appointmentTime: 1 }); // Sort by date and time
 
-    res.status(200).json(scheduledAppointments);
-  } catch (error) {
-    console.error('Error fetching scheduled appointments:', error);
-    res.status(500).json({ error: 'Server error while fetching scheduled appointments.' });
-  }
-};
-
-// Get previous appointments (all appointments before today)
-const getPreviousAppointments = async (req, res) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
-
-    const previousAppointments = await Appointment.find({
-      appointmentDate: { $lt: today }, // Get appointments before today
-      status: 'completed', // Fetch completed appointments
-    })
-      .populate('doctor patient hospital')
-      .sort({ appointmentDate: -1 }); // Sort by date descending
-
-    res.status(200).json(previousAppointments);
-  } catch (error) {
-    console.error('Error fetching previous appointments:', error);
-    res.status(500).json({ error: 'Server error while fetching previous appointments.' });
-  }
-};
-
-// Get canceled appointments
-const getCanceledAppointments = async (req, res) => {
-  console.log("Fetching canceled appointments...");
-  try {
-    // Fetch appointments with status 'canceled'
-    const canceledAppointments = await Appointment.find({ status: 'canceled' })
-      .populate('doctor patient hospital')
-      .sort({ appointmentCancelDate: -1 });
-
-    if (!canceledAppointments || canceledAppointments.length === 0) {
-      return res.status(404).json({ message: 'No canceled appointments found' });
-    }
-
-    // Success response
-    res.status(200).json(canceledAppointments);
-  } catch (error) {
-    console.error('Error fetching canceled appointments:', error.message);
-    res.status(500).json({ error: `Server error while fetching canceled appointments: ${error.message}` });
-  }
-};
-
-
-// Get pending appointments
-const getPendingAppointments = async (req, res) => {
-  try {
-    const pendingAppointments = await Appointment.find({ status: 'pending' })
-      .populate('doctor patient hospital')
-      .sort({ appointmentDate: 1, appointmentTime: 1 }); // Sort by date and time
-
-    res.status(200).json(pendingAppointments);
-  } catch (error) {
-    console.error('Error fetching pending appointments:', error);
-    res.status(500).json({ error: 'Server error while fetching pending appointments.' });
-  }
-};
 
 // Fetch all appointments for the authenticated doctor
 const getAppointmentsByDoctor = async (req, res) => {
@@ -441,6 +374,85 @@ const getAppointmentsByPatient = async (req, res) => {
 
 
 
+//patient-manegment
+
+const getTodayAppointments = async (req, res) => {
+  try {
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+    const appointments = await Appointment.find({
+      appointmentDate: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      },
+      status: 'scheduled'
+    })
+      .populate('patient doctor', 'name issue diseaseName')
+      .exec();
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
+// Get previous appointments
+const getPreviousAppointments = async (req, res) => {
+  try {
+    const today = new Date();
+
+    const appointments = await Appointment.find({
+      appointmentDate: { $lt: today },
+      status: { $ne: 'canceled' }
+    })
+      .populate('patient doctor', 'name issue diseaseName')
+      .exec();
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
+// Get upcoming appointments
+const getUpcomingAppointments = async (req, res) => {
+  try {
+    const today = new Date();
+
+    const appointments = await Appointment.find({
+      appointmentDate: { $gt: today },
+      status: 'scheduled'
+    })
+      .populate('patient doctor', 'name issue diseaseName')
+      .exec();
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
+// Get canceled appointments
+const getCanceledAppointments = async (req, res) => {
+  try {
+    const appointments = await Appointment.find({
+      status: 'canceled'
+    })
+      .populate('patient doctor', 'name issue diseaseName')
+      .exec();
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
 
 
   module.exports = {
@@ -451,10 +463,87 @@ const getAppointmentsByPatient = async (req, res) => {
     deleteAppointment,
     addUnavailableTime,
     removeUnavailableTime,
-    getScheduledAppointments,
-    getPreviousAppointments,
-    getCanceledAppointments,
-    getPendingAppointments,
     getAppointmentsByDoctor,
     getAppointmentsByPatient,
+    getTodayAppointments,
+    getPreviousAppointments,
+    getUpcomingAppointments,
+    getCanceledAppointments
   }
+
+
+
+  // getScheduledAppointments,
+  // getPreviousAppointments,
+  // getCanceledAppointments,
+  // getPendingAppointments,
+
+
+  // const getScheduledAppointments = async (req, res) => {
+  //   try {
+  //     const scheduledAppointments = await Appointment.find({ status: 'scheduled' })
+  //       .populate('doctor patient hospital')
+  //       .sort({ appointmentDate: 1, appointmentTime: 1 }); // Sort by date and time
+  
+  //     res.status(200).json(scheduledAppointments);
+  //   } catch (error) {
+  //     console.error('Error fetching scheduled appointments:', error);
+  //     res.status(500).json({ error: 'Server error while fetching scheduled appointments.' });
+  //   }
+  // };
+  
+  // // Get previous appointments (all appointments before today)
+  // const getPreviousAppointments = async (req, res) => {
+  //   try {
+  //     const today = new Date();
+  //     today.setHours(0, 0, 0, 0); // Start of today
+  
+  //     const previousAppointments = await Appointment.find({
+  //       appointmentDate: { $lt: today }, // Get appointments before today
+  //       status: 'completed', // Fetch completed appointments
+  //     })
+  //       .populate('doctor patient hospital')
+  //       .sort({ appointmentDate: -1 }); // Sort by date descending
+  
+  //     res.status(200).json(previousAppointments);
+  //   } catch (error) {
+  //     console.error('Error fetching previous appointments:', error);
+  //     res.status(500).json({ error: 'Server error while fetching previous appointments.' });
+  //   }
+  // };
+  
+  // // Get canceled appointments
+  // const getCanceledAppointments = async (req, res) => {
+  //   console.log("Fetching canceled appointments...");
+  //   try {
+  //     // Fetch appointments with status 'canceled'
+  //     const canceledAppointments = await Appointment.find({ status: 'canceled' })
+  //       .populate('doctor patient hospital')
+  //       .sort({ appointmentCancelDate: -1 });
+  
+  //     if (!canceledAppointments || canceledAppointments.length === 0) {
+  //       return res.status(404).json({ message: 'No canceled appointments found' });
+  //     }
+  
+  //     // Success response
+  //     res.status(200).json(canceledAppointments);
+  //   } catch (error) {
+  //     console.error('Error fetching canceled appointments:', error.message);
+  //     res.status(500).json({ error: `Server error while fetching canceled appointments: ${error.message}` });
+  //   }
+  // };
+  
+  
+  // // Get pending appointments
+  // const getPendingAppointments = async (req, res) => {
+  //   try {
+  //     const pendingAppointments = await Appointment.find({ status: 'pending' })
+  //       .populate('doctor patient hospital')
+  //       .sort({ appointmentDate: 1, appointmentTime: 1 }); // Sort by date and time
+  
+  //     res.status(200).json(pendingAppointments);
+  //   } catch (error) {
+  //     console.error('Error fetching pending appointments:', error);
+  //     res.status(500).json({ error: 'Server error while fetching pending appointments.' });
+  //   }
+  // };
