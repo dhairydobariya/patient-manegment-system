@@ -6,6 +6,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const chatRoutes = require('./route/chatRoute.js'); // Chat routes
 const { saveChatMessage } = require('./controllers/chatcontroller.js');
+const Chat = require("./models/chatModel.js")
 
 let route = require('./route/route');
 let billroute = require('./route/billroute.js');
@@ -20,16 +21,11 @@ let teleconsultationroute = require('./route/teleconsulationRoute.js');
 let bodyparser = require('body-parser');
 let mongoose = require('./db/database');
 let cookieparser = require('cookie-parser');
+const { log } = require("console");
 
 require('dotenv').config();
 
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: '*', // Allow all origins, modify if needed
-    methods: ['GET', 'POST']
-  }
-});
+
 
 app.use(bodyparser.urlencoded({ extended: true }));
 app.use(express.json());
@@ -47,43 +43,36 @@ app.use('/prescriptions', prescriptionsroute);
 app.use('/teleconsultation', teleconsultationroute);
 
 // Socket.io implementation
+const server = http.createServer(app);
+const io = socketIo(server);
+
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+    console.log('A user connected:', socket.id);
 
-  // Join room for real-time chat based on doctor and patient
-  socket.on('joinRoom', ({ doctorId, patientId }) => {
-    const roomId = `${doctorId}_${patientId}`;
-    socket.join(roomId);
-    console.log(`User joined room: ${roomId}`);
-  });
+    socket.on('joinRoom', ({ doctorId, patientId }) => {
+      
+        const room = [doctorId, patientId].sort().join('-');
+        console.log(room)        
+        socket.join(room);
+        socket.emit('joinRoom', { doctorId, patientId });
+    });
 
-  // Listen for chat messages and save to database
-  socket.on('chatMessage', async ({ doctorId, patientId, message, senderId, senderModel }) => {
-    if (!doctorId || !patientId || !message || !senderId || !senderModel) {
-      socket.emit('error', 'Invalid message data');
-      return;
-    }
+    socket.on('message', async (data) => {
+      console.log(data);
+        const { doctorId , patientId, messageContent } = data;
+        const chat = new Chat({ doctorId, patientId, messageContent });
+        await chat.save();
 
-    const roomId = `${doctorId}_${patientId}`;
+        const room = [doctorId, patientId].sort().join('-');
+        io.to(room).emit('message', chat);
+    });
 
-    try {
-      // Save the chat message to the database
-      const newMessage = await saveChatMessage(doctorId, patientId, message, senderId, senderModel);
-
-      // Emit the new message to the specific room (doctor-patient room)
-      io.to(roomId).emit('message', newMessage);
-    } catch (error) {
-      console.error('Error saving message:', error);
-      socket.emit('error', 'Message could not be saved');
-    }
-  });
-
-  // Handle disconnection
-  socket.on('disconnect', () => {
-    console.log('User disconnected');
-  });
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
 });
 
 server.listen(port, (req, res) => {
   console.log(`Server is running on port ${port}`);
 });
+

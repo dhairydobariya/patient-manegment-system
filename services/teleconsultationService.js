@@ -1,19 +1,36 @@
 const twilio = require('twilio');
 
 // Twilio credentials
-const accountSid = 'your_account_sid';
-const authToken = 'your_auth_token';
+const accountSid = process.env.TWILIO_ACCOUNT_SID; 
+const authToken = process.env.TWILIO_AUTH_TOKEN; 
 const client = twilio(accountSid, authToken);
 
-// Create a video session link using Twilio
+// Create or retrieve a video session link using Twilio
 exports.createTeleconsultationLink = async (appointmentId) => {
   try {
-    // Twilio video room creation logic
-    const room = await client.video.rooms.create({ uniqueName: appointmentId });
+    // Check if the room already exists
+    const existingRoom = await client.video.rooms.list({
+      uniqueName: `teleconsultation-${appointmentId}`,
+      limit: 1,
+    });
 
-    // Return the video room URL (You may customize this further)
-    return `https://video.twilio.com/${room.sid}`;
+    // If the room exists, return its SID
+    if (existingRoom.length > 0) {
+      return { message: 'Room exists', roomLink: existingRoom[0].sid };
+    }
+
+    // Create a new Twilio video room
+    const room = await client.video.rooms.create({
+      uniqueName: `teleconsultation-${appointmentId}`,
+      type: 'group',
+    });
+
+    // Log the creation of the teleconsultation link
+    console.log(`Teleconsultation link created for appointmentId: ${appointmentId}, Room SID: ${room.sid}`);
+
+    // Return the video room URL
+    return { message: 'Teleconsultation started', roomLink: `https://video.twilio.com/${room.sid}` };
   } catch (error) {
-    throw new Error('Error creating teleconsultation link');
+    throw new Error('Error creating teleconsultation link: ' + error.message);
   }
 };

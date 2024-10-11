@@ -313,87 +313,6 @@ const changeAdminPassword = async (req, res) => {
 };
 
 // Admin Dashboard API with Search Functionality
-const getAdminDashboardData = async (req, res) => {
-    try {
-      const adminId = req.user.id; // Extracted from JWT or session
-      const admin = await Admin.findById(adminId).populate('hospital');
-      const hospitalId = admin.hospital._id;
-  
-      const { searchQuery, filterBy } = req.query; // Get search query and filter from frontend
-  
-      let searchResults = [];
-  
-      // Handle the 'all' filter - search in both Doctors and Patients
-      if (filterBy === 'all' || filterBy === 'doctor') {
-        // 1. Search Doctors
-        const doctors = await Doctor.find({
-          currentHospital: hospitalId,  // Filter by hospital
-          name: { $regex: searchQuery, $options: 'i' }  // Case-insensitive match for name
-        });
-  
-        if (doctors.length > 0) {
-          const doctorIds = doctors.map(doctor => doctor._id);
-          const doctorAppointments = await Appointment.find({
-            doctor: { $in: doctorIds },
-            hospital: hospitalId
-          }).populate('patient doctor');
-  
-          // Map doctor results to the response format
-          searchResults = searchResults.concat(doctorAppointments.map(appointment => ({
-            type: 'doctor',
-            patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
-            patientIssue: appointment.patient.patientIssue,
-            doctorName: appointment.doctor.name,
-            diseaseName: appointment.patient.diseaseName,
-            appointmentTime: appointment.appointmentDate,
-            appointmentType: appointment.appointmentType,
-          })));
-        }
-      }
-  
-      if (filterBy === 'all' || filterBy === 'patient') {
-        // 2. Search Patients
-        const patients = await Patient.find({
-          currentHospital: hospitalId,  // Filter by hospital
-          $or: [
-            { firstName: { $regex: searchQuery, $options: 'i' } },  // Case-insensitive match for first name
-            { lastName: { $regex: searchQuery, $options: 'i' } }    // Case-insensitive match for last name
-          ]
-        });
-  
-        if (patients.length > 0) {
-          const patientIds = patients.map(patient => patient._id);
-          const patientAppointments = await Appointment.find({
-            patient: { $in: patientIds },
-            hospital: hospitalId
-          }).populate('patient doctor');
-  
-          // Map patient results to the response format
-          searchResults = searchResults.concat(patientAppointments.map(appointment => ({
-            type: 'patient',
-            patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
-            patientIssue: appointment.patient.patientIssue,
-            doctorName: appointment.doctor.name,
-            diseaseName: appointment.patient.diseaseName,
-            appointmentTime: appointment.appointmentDate,
-            appointmentType: appointment.appointmentType,
-          })));
-        }
-      }
-  
-      if (searchResults.length === 0) {
-        return res.status(404).json({ message: "No results found for the given search query" });
-      }
-  
-      // Send the combined search results
-      return res.status(200).json({ searchResults });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: 'Server Error', error });
-    }
-  };
-
-
   let datadeshboard =async (req, res) => {
     try {
         // Fetch total patients, doctors, and appointments
@@ -767,8 +686,160 @@ const getAppointmentDetails = async (req, res) => {
     }
   };  
 
-
+  // Search appointments by patient name
+  const searchAppointments = async (req, res) => {
+    try {
+      const searchQuery = req.query.name; // Get search query from request query parameters
   
+      // Validate search query
+      if (!searchQuery) {
+        return res.status(400).json({ message: 'Please provide a valid search query.' });
+      }
+  
+      // Find appointments where the patient's first name starts with the given search query
+      const appointments = await Appointment.find()
+        .populate({
+          path: 'patient',
+          select: 'firstName lastName', // Selecting patient's first and last name
+          match: { firstName: { $regex: `^${searchQuery}`, $options: 'i' } } // Case-insensitive search for names starting with searchQuery
+        })
+        .populate({
+          path: 'doctor',
+          select: 'name', // Selecting doctor's name
+        });
+  
+      // Filter out appointments where the patient doesn't match the search query
+      const filteredAppointments = appointments.filter(appointment => appointment.patient !== null);
+  
+      // If no matching appointments found
+      if (filteredAppointments.length === 0) {
+        return res.status(404).json({ message: 'No appointments found for the given query.' });
+      }
+  
+      // Format the response to include the necessary fields
+      const responseData = filteredAppointments.map(appointment => ({
+        patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+        patientIssue: appointment.patientIssue,
+        doctorName: appointment.doctor.name,
+        diseaseName: appointment.diseaseName,
+        appointmentType: appointment.appointmentType,
+        appointmentTime: appointment.appointmentTime,
+      }));
+  
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('Error searching appointments:', error);
+      res.status(500).json({ message: 'Server error while searching appointments.' });
+    }
+  };
+
+// Get appointments for both doctor and patient views
+let getAppointmentsForUser = async (req, res) => {
+  try {
+    const { name } = req.query;
+
+    if (!name) {
+      return res.status(400).json({ message: 'Name query parameter is required.' });
+    }
+
+    // Find doctors whose name matches the query
+    const matchingDoctors = await Doctor.find({ name: new RegExp(name, 'i') }).select('_id');
+    const doctorIds = matchingDoctors.map(doctor => doctor._id);
+
+    // Find patients whose name matches the query (first or last name)
+    const matchingPatients = await Patient.find({
+      $or: [
+        { firstName: new RegExp(name, 'i') },
+        { lastName: new RegExp(name, 'i') }
+      ]
+    }).select('_id');
+    const patientIds = matchingPatients.map(patient => patient._id);
+
+    // Find appointments where the doctor matches the found doctor IDs
+    const doctorAppointments = await Appointment.find({
+      doctor: { $in: doctorIds }
+    })
+    .populate({
+      path: 'patient',
+      select: 'firstName lastName', // Selecting patient's first and last name
+    })
+    .populate({
+      path: 'doctor',
+      select: 'name', // Selecting doctor's name
+    });
+
+    // Find appointments where the patient matches the found patient IDs
+    const patientAppointments = await Appointment.find({
+      patient: { $in: patientIds }
+    })
+    .populate({
+      path: 'patient',
+      select: 'firstName lastName', // Selecting patient's first and last name
+    })
+    .populate({
+      path: 'doctor',
+      select: 'name', // Selecting doctor's name
+    });
+
+    // Format doctor-side data
+    const doctorData = doctorAppointments.map(appointment => ({
+      patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+      patientIssue: appointment.patientIssue,
+      doctorName: appointment.doctor.name,
+      diseaseName: appointment.diseaseName,
+      appointmentType: appointment.appointmentType,
+      appointmentTime: appointment.appointmentTime,
+    }));
+
+    // Format patient-side data
+    const patientData = patientAppointments.map(appointment => ({
+      patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+      patientIssue: appointment.patientIssue,
+      doctorName: appointment.doctor.name,
+      diseaseName: appointment.diseaseName,
+      appointmentType: appointment.appointmentType,
+      appointmentTime: appointment.appointmentTime,
+    }));
+
+    // Combine both arrays in the response
+    res.status(200).json({
+      doctorData,  // Appointments where doctor name matches
+      patientData  // Appointments where patient name matches
+    });
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.status(500).json({ message: 'Server error while fetching appointments.' });
+  }
+};
+
+let getDoctorDetails = async (req, res) => {
+  try {
+    const { name } = req.query;
+
+    if (!name) {
+      return res.status(400).json({ message: 'Doctor name query parameter is required.' });
+    }
+
+    // Find doctors whose name matches the query
+    const doctors = await Doctor.find({ name: new RegExp(name, 'i') }).select(
+      'name gender qualification specialtyType workingTime checkupTime breakTime'
+    );
+
+    if (!doctors.length) {
+      return res.status(404).json({ message: 'No doctors found with the provided name.' });
+    }
+
+    // Respond with the matched doctor details
+    res.status(200).json({
+      doctorData: doctors
+    });
+  } catch (error) {
+    console.error('Error fetching doctor details:', error);
+    res.status(500).json({ message: 'Server error while fetching doctor details.' });
+  }
+};
+
+
 module.exports = {
     defaults,
     register,
@@ -782,7 +853,6 @@ module.exports = {
     getprofile,
     updateprofile,
     changeAdminPassword,
-    getAdminDashboardData,
     datadeshboard,
     getDoctorsByHospital,
     getDoctorById,
@@ -792,4 +862,8 @@ module.exports = {
     getCanceledAppointments,
     getAppointmentDetails,
     getReportAnalytics,
+    searchAppointments,
+    getAppointmentsForUser,
+    getDoctorDetails,
+
 };

@@ -30,11 +30,6 @@
     router.patch('/profile' ,authenticateUser,authorizeRoles('admin'), adminController.updateprofile )
     router.post('/profile/changepass' , authenticateUser,authorizeRoles('admin'), adminController.changeAdminPassword)
 
-
-    router.get('/admin-deshboard' , authenticateUser,authorizeRoles('admin'), adminController.getAdminDashboardData)
-    router.get('/admindata' ,authenticateUser,authorizeRoles('admin'), adminController.datadeshboard)
-
-
     //doctor-manegment 
     router.get('/doctor-manegment', authenticateUser,authorizeRoles('admin') ,adminController.getDoctorsByHospital );
     router.get('/doctor-manegment/doctor/:id', authenticateUser,authorizeRoles('admin'), adminController.getDoctorById);
@@ -60,5 +55,16 @@
 
     //report and analyist
     router.get('/report-analytics',authenticateUser,authorizeRoles('Doctor' , 'admin'), adminController.getReportAnalytics);
+
+
+
+    // searching api   & deshboard 
+    router.get('/all', adminController.getAppointmentsForUser);
+
+    router.get('/patient', adminController.searchAppointments);
+
+    router.get('/doctor' , adminController.getDoctorDetails)
+
+    router.get('/admindata' ,authenticateUser,authorizeRoles('admin'), adminController.datadeshboard)
 
     module.exports = router;

@@ -1,10 +1,5 @@
 const Appointment = require('../models/appointmentmodel');
-const twilio = require('twilio');
-
-// Twilio credentials (environment variables recommended for security)
-const accountSid = process.env.TWILIO_ACCOUNT_SID; 
-const authToken = process.env.TWILIO_AUTH_TOKEN; 
-const client = twilio(accountSid, authToken);
+const teleconsultationService = require('../services/teleconsultationService');
 
 // Create a video room for the teleconsultation
 const createTeleconsultation = async (req, res) => {
@@ -17,18 +12,15 @@ const createTeleconsultation = async (req, res) => {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    // Create Twilio video room
-    const room = await client.video.rooms.create({
-      uniqueName: `teleconsultation-${appointmentId}`,
-      type: 'group',
-    });
+    // Use the service to create or get the teleconsultation link
+    const { message, roomLink } = await teleconsultationService.createTeleconsultationLink(appointmentId);
 
     // Update the appointment with teleconsultation link
-    appointment.teleconsultationLink = room.sid; // room.sid is the unique ID for the room
+    appointment.teleconsultationLink = roomLink; // roomLink is the unique ID for the room
     appointment.teleconsultationStatus = 'in_progress';
     await appointment.save();
 
-    return res.status(200).json({ message: 'Teleconsultation started', roomLink: room.sid });
+    return res.status(200).json({ message, roomLink });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
